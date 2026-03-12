@@ -1,73 +1,92 @@
 <?php
 session_start();
 
-// Функция для генерации случайного года
 function getRandomYear() {
     return rand(1930, 1950);
 }
 
-// Функция для проверки, кричит ли пользователь
 function isYelling($message) {
     return substr(trim($message), -1) === "!";
 }
 
-// Инициализация счётчика прощаний
 if (!isset($_SESSION['bye_count'])) {
     $_SESSION['bye_count'] = 0;
 }
 
-// Обработка сообщения
+if (!isset($_SESSION['history'])) {
+    $_SESSION['history'] = [];
+}
+
 $response = "";
 $user_message = "";
 
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['message'])) {
     $user_message = trim($_POST['message']);
     
-    // Добавляем сообщение в историю
-    if (!isset($_SESSION['history'])) {
-        $_SESSION['history'] = [];
-    }
-    
-    // Проверяем на выход
     if ($user_message === "ПОКА!") {
         $_SESSION['bye_count']++;
         
+        $_SESSION['history'][] = [
+            'user' => $user_message,
+            'granny' => '',
+            'time' => date('H:i:s')
+        ];
+        
         if ($_SESSION['bye_count'] >= 3) {
-            $response = "ДО СВИДАНИЯ, МИЛЫЙ!";
-            $_SESSION['bye_count'] = 0;
+            $_SESSION['history'][] = [
+                'user' => '',
+                'granny' => 'ДО СВИДАНИЯ, МИЛЫЙ!',
+                'time' => date('H:i:s')
+            ];
+            
+            $final_message = "ДО СВИДАНИЯ, МИЛЫЙ!";
+            $_SESSION['final_message'] = $final_message;
+            
             session_destroy();
+            session_start();
+            $_SESSION['final_message'] = $final_message;
+            $_SESSION['history'] = [
+                [
+                    'user' => '',
+                    'granny' => $final_message,
+                    'time' => date('H:i:s')
+                ]
+            ];
+            
+            header('Location: index.php?bye=3');
+            exit;
         } else {
             $response = "НЕТ, НИ РАЗУ С " . getRandomYear() . " ГОДА!";
+            
+            $last_index = count($_SESSION['history']) - 1;
+            $_SESSION['history'][$last_index]['granny'] = $response;
         }
     } else {
-        // Сбрасываем счётчик прощаний
         $_SESSION['bye_count'] = 0;
         
-        // Обычный ответ
         if (isYelling($user_message)) {
             $response = "НЕТ, НИ РАЗУ С " . getRandomYear() . " ГОДА!";
         } else {
             $response = "АСЬ?! ГОВОРИ ГРОМЧЕ, ВНУЧЕК!";
         }
+        
+        $_SESSION['history'][] = [
+            'user' => $user_message,
+            'granny' => $response,
+            'time' => date('H:i:s')
+        ];
     }
-    
-    // Сохраняем в историю
-    $_SESSION['history'][] = [
-        'user' => $user_message,
-        'granny' => $response,
-        'time' => date('H:i:s')
-    ];
 }
 
-// Обработка сброса
 if (isset($_GET['reset'])) {
     session_destroy();
+    session_start();
     header('Location: index.php');
     exit;
 }
 
-// Получаем историю
 $history = $_SESSION['history'] ?? [];
+$final_message = $_SESSION['final_message'] ?? '';
 ?>
 
 <!DOCTYPE html>
@@ -296,6 +315,11 @@ $history = $_SESSION['history'] ?? [];
             box-shadow: 0 2px 5px rgba(100, 20, 20, 0.4);
         }
 
+        .send-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
         .hints {
             padding: 20px;
             background: #f0d8d8;
@@ -429,27 +453,50 @@ $history = $_SESSION['history'] ?? [];
             font-size: 0.9em;
             color: #6b2d2d;
             text-align: right;
-            padding: 5px 10px;
+            padding: 8px 15px;
             background: #ffe5e5;
             border-radius: 20px;
             display: inline-block;
-            margin-top: 5px;
+            margin-bottom: 10px;
+            border: 1px solid #b56b6b;
+            font-weight: bold;
+        }
+
+        .counter-container {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 10px;
+        }
+
+        .final-message {
+            text-align: center;
+            font-size: 1.5em;
+            color: #5c1a1a;
+            padding: 30px;
+            background: #ffefef;
+            border-radius: 15px;
+            margin: 20px 0;
+            border: 2px solid #8b3a3a;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(139, 58, 58, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(139, 58, 58, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(139, 58, 58, 0); }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <!-- Шапка -->
         <div class="header">
             <h1>👵 Глухая бабушка</h1>
             <p class="subtitle">ЧЕГО СКАЗАТЬ-ТО ХОТЕЛ, МИЛОК?!</p>
         </div>
 
-        <!-- Основной чат -->
         <div class="chat-container">
-            <!-- Окно чата -->
             <div class="chat-messages" id="chatMessages">
-                <?php if (empty($history)): ?>
+                <?php if (empty($history) && !$final_message): ?>
                     <div class="welcome-message">
                         ✨ Напиши что-нибудь бабушке... Но помни: она плохо слышит! ✨
                     </div>
@@ -461,109 +508,123 @@ $history = $_SESSION['history'] ?? [];
                             <div class="message-time">сейчас</div>
                         </div>
                     </div>
+                <?php elseif ($final_message): ?>
+                    <div class="final-message">
+                        🎉 <?php echo $final_message; ?> 🎉
+                    </div>
                 <?php else: ?>
                     <?php foreach ($history as $msg): ?>
-                        <!-- Сообщение пользователя -->
-                        <div class="message user-message">
-                            <div class="avatar">👤</div>
-                            <div class="message-content">
-                                <div class="message-sender">Вы</div>
-                                <div class="message-text"><?php echo htmlspecialchars($msg['user']); ?></div>
-                                <div class="message-time"><?php echo $msg['time']; ?></div>
+                        <?php if (!empty($msg['user'])): ?>
+                            <div class="message user-message">
+                                <div class="avatar">👤</div>
+                                <div class="message-content">
+                                    <div class="message-sender">Вы</div>
+                                    <div class="message-text"><?php echo htmlspecialchars($msg['user']); ?></div>
+                                    <div class="message-time"><?php echo $msg['time']; ?></div>
+                                </div>
                             </div>
-                        </div>
-                        <!-- Ответ бабушки -->
-                        <div class="message granny-message">
-                            <div class="avatar">👵</div>
-                            <div class="message-content">
-                                <div class="message-sender">Бабушка</div>
-                                <div class="message-text"><?php echo htmlspecialchars($msg['granny']); ?></div>
-                                <div class="message-time"><?php echo $msg['time']; ?></div>
+                        <?php endif; ?>
+                        
+                        <?php if (!empty($msg['granny'])): ?>
+                            <div class="message granny-message">
+                                <div class="avatar">👵</div>
+                                <div class="message-content">
+                                    <div class="message-sender">Бабушка</div>
+                                    <div class="message-text"><?php echo htmlspecialchars($msg['granny']); ?></div>
+                                    <div class="message-time"><?php echo $msg['time']; ?></div>
+                                </div>
                             </div>
-                        </div>
+                        <?php endif; ?>
                     <?php endforeach; ?>
                 <?php endif; ?>
             </div>
 
-            <!-- Счётчик ПОКА! (для отладки) -->
-            <?php if (isset($_SESSION['bye_count']) && $_SESSION['bye_count'] > 0): ?>
-                <div class="bye-counter">
-                    🗣️ Осталось сказать ПОКА! <?php echo 3 - $_SESSION['bye_count']; ?> раз(а)
+            <?php if (isset($_SESSION['bye_count']) && $_SESSION['bye_count'] > 0 && $_SESSION['bye_count'] < 3 && empty($final_message)): ?>
+                <div class="counter-container">
+                    <div class="bye-counter">
+                        🗣️ Осталось сказать <strong>ПОКА! <?php echo 3 - $_SESSION['bye_count']; ?></strong> раз(а) до выхода
+                    </div>
                 </div>
             <?php endif; ?>
 
-            <!-- Форма ввода -->
-            <form method="POST" action="" class="input-form" id="messageForm">
-                <input 
-                    type="text" 
-                    name="message" 
-                    id="messageInput"
-                    placeholder="Напишите что-нибудь бабушке..." 
-                    autocomplete="off"
-                    required
-                >
-                <button type="submit" class="send-btn" id="sendBtn">
-                    <span>📢</span> Сказать
-                </button>
-            </form>
+            <?php if (empty($final_message)): ?>
+                <form method="POST" action="" class="input-form" id="messageForm">
+                    <input 
+                        type="text" 
+                        name="message" 
+                        id="messageInput"
+                        placeholder="Напишите что-нибудь бабушке..." 
+                        autocomplete="off"
+                        required
+                    >
+                    <button type="submit" class="send-btn" id="sendBtn">
+                        <span>📢</span> Сказать
+                    </button>
+                </form>
+            <?php else: ?>
+                <div style="text-align: center; padding: 20px; background: #ffe5e5; border-radius: 50px; margin-top: 10px;">
+                    <p style="color: #5c1a1a; font-size: 1.2em;"> Разговор окончен </p>
+                </div>
+            <?php endif; ?>
         </div>
 
-        <!-- Подсказки -->
         <div class="hints">
             <div class="hint-title">🎯 Бордовые подсказки:</div>
             <div class="hint-items">
                 <span class="hint">• Не кричишь → "АСЬ?! ГОВОРИ ГРОМЧЕ!"</span>
                 <span class="hint">• Кричи с "!" → случайный год (1930-1950)</span>
                 <span class="hint">• Чтобы уйти, скажи ПОКА! 3 раза подряд</span>
-                <span class="hint">• Не получилось? Нажми "Начать заново"</span>
+                <span class="hint">• Счётчик покажет, сколько осталось</span>
             </div>
         </div>
 
-        <!-- Кнопка сброса -->
         <div class="reset-section">
             <a href="?reset=1" class="reset-btn">🔄 Начать новый разговор</a>
         </div>
     </div>
 
     <script>
-        // Функция для скролла вниз
         function scrollToBottom() {
             const chatMessages = document.getElementById('chatMessages');
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
-        // Запуск при загрузке страницы
         window.onload = function() {
             scrollToBottom();
-            document.getElementById('messageInput').focus();
+            const messageInput = document.getElementById('messageInput');
+            if (messageInput) {
+                messageInput.focus();
+            }
             
-            // Добавляем эффекты для кнопки отправки (только при наведении)
             const sendBtn = document.getElementById('sendBtn');
-            
-            sendBtn.addEventListener('mouseenter', function() {
-                this.style.transform = 'scale(1.02)';
-            });
-            
-            sendBtn.addEventListener('mouseleave', function() {
-                this.style.transform = 'scale(1)';
-            });
+            if (sendBtn) {
+                sendBtn.addEventListener('mouseenter', function() {
+                    this.style.transform = 'scale(1.02)';
+                });
+                
+                sendBtn.addEventListener('mouseleave', function() {
+                    this.style.transform = 'scale(1)';
+                });
+            }
         };
 
-        // Обработка отправки формы (без анимации)
-        document.getElementById('messageForm').addEventListener('submit', function(e) {
-            const messageInput = document.getElementById('messageInput');
-            const message = messageInput.value.trim();
-            
-            if (!message) {
-                e.preventDefault();
-                messageInput.style.borderColor = '#ff0000';
-                setTimeout(() => {
-                    messageInput.style.borderColor = '#d4a0a0';
-                }, 500);
-            }
-        });
+        const messageForm = document.getElementById('messageForm');
+        if (messageForm) {
+            messageForm.addEventListener('submit', function(e) {
+                const messageInput = document.getElementById('messageInput');
+                const message = messageInput.value.trim();
+                
+                if (!message) {
+                    e.preventDefault();
+                    messageInput.style.borderColor = '#ff0000';
+                    setTimeout(() => {
+                        messageInput.style.borderColor = '#d4a0a0';
+                    }, 500);
+                }
+            });
+        }
 
-        // Эффекты для подсказок
+
         document.querySelectorAll('.hint').forEach(hint => {
             hint.addEventListener('mouseenter', function() {
                 this.style.transform = 'translateY(-2px)';
@@ -574,13 +635,18 @@ $history = $_SESSION['history'] ?? [];
             });
         });
 
-        // Обработка клавиши Enter
-        document.getElementById('messageInput').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                document.getElementById('messageForm').requestSubmit();
-            }
-        });
+        const messageInput = document.getElementById('messageInput');
+        if (messageInput) {
+            messageInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    const form = document.getElementById('messageForm');
+                    if (form) {
+                        form.requestSubmit();
+                    }
+                }
+            });
+        }
     </script>
 </body>
 </html>
