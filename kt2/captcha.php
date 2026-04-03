@@ -24,7 +24,7 @@ $colors = [
     imagecolorallocate($img, 128, 0, 128),
     imagecolorallocate($img, 255, 0, 255),
     imagecolorallocate($img, 0, 255, 255),
-    imagecolorallocate($img, 255, 255, 0),
+   
     imagecolorallocate($img, 255, 0, 128),
 ];
 
