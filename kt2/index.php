@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             display: flex;
             justify-content: center;
             align-items: center;
-            background-image: url('https://img.freepik.com/premium-photo/close-up-monkeys-sitting-outdoors_1048944-20541537.jpg');
+            background-image: url('https://avatars.mds.yandex.net/i?id=e8be2efee30da72c855deb4d696d160d_sr-10702829-images-thumbs&n=13');
             font-family: Arial, sans-serif;
         }
         
